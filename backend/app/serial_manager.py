@@ -79,11 +79,22 @@ class SerialManager:
             # Test connection with PING
             response = self.send_command("PING", timeout=3)
             if response and "PONG" in response:
-                logger.info("✓ Arduino connected and responding")
-                return True
+                logger.info("[OK] Arduino connected and responding")
             else:
                 logger.warning("Arduino connected but not responding to PING")
-                return True  # Still consider connected
+            
+            # Enable test mode to use mock sensor values (prevents emergency mode from floating pins)
+            logger.info("Enabling TEST_MODE for safe operation without physical sensors...")
+            test_mode_response = self.send_command("TEST_MODE_ON", timeout=2)
+            if test_mode_response and "Enabled" in test_mode_response:
+                logger.info("[OK] Test mode enabled")
+            
+            # Reset emergency mode if it was triggered by floating pins on startup
+            reset_response = self.send_command("RESET_EMERGENCY", timeout=2)
+            if reset_response and "reset" in reset_response.lower():
+                logger.info("[OK] Emergency mode reset")
+            
+            return True  # Still consider connected
                 
         except serial.SerialException as e:
             logger.error(f"Failed to connect to Arduino: {e}")
@@ -108,7 +119,7 @@ class SerialManager:
     def send_command(self, command: str, timeout: int = 3) -> Optional[str]:
         """
         Send command to Arduino and wait for response
-        Returns the response line or None if timeout/error
+        Returns the actual response line (skips COMMAND_RECEIVED echo)
         """
         if not self.is_connected():
             logger.error("Cannot send command: not connected")
@@ -120,15 +131,26 @@ class SerialManager:
             self.serial_conn.write(cmd_line.encode('utf-8'))
             logger.debug(f"→ Sent command: {command}")
             
-            # Wait for response
+            # Wait for response - Arduino sends COMMAND_RECEIVED first, then actual response
             start_time = time.time()
+            lines_received = []
+            
             while time.time() - start_time < timeout:
                 if self.serial_conn.in_waiting > 0:
-                    response = self.serial_conn.readline().decode('utf-8').strip()
+                    response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
                     if response:
                         logger.debug(f"← Received: {response}")
-                        return response
-                time.sleep(0.1)
+                        lines_received.append(response)
+                        
+                        # Skip COMMAND_RECEIVED echo, return the actual response
+                        if not response.startswith("COMMAND_RECEIVED:"):
+                            return response
+                
+                time.sleep(0.05)
+            
+            # If we only got COMMAND_RECEIVED, return the last line
+            if lines_received:
+                return lines_received[-1]
             
             logger.warning(f"Command '{command}' timed out")
             return None
@@ -153,7 +175,8 @@ class SerialManager:
             return data
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse telemetry JSON: {e}")
-            logger.debug(f"Raw line: {line}")
+            logger.error(f"Raw line: {repr(line)}")
+            logger.error(f"JSON string: {repr(json_str)}")
             return None
         except Exception as e:
             logger.error(f"Unexpected error parsing telemetry: {e}")

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Power, PowerOff, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { valve } from '@/api/client';
@@ -11,29 +11,44 @@ interface ControlPanelProps {
 
 export const ControlPanel = ({ valveState, emergencyMode }: ControlPanelProps) => {
   const [showForceConfirm, setShowForceConfirm] = useState(false);
+  const [localValveState, setLocalValveState] = useState<'OPEN' | 'CLOSED' | undefined>(valveState);
   const queryClient = useQueryClient();
   const user = useAuth((state) => state.user);
 
   const isAdmin = user?.role === 'admin';
   const canOperate = isAdmin || user?.role === 'operator';
 
+  // Update local state when prop changes
+  useEffect(() => {
+    setLocalValveState(valveState);
+  }, [valveState]);
+
   const openMutation = useMutation({
     mutationFn: valve.open,
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (response.data.success) {
+        setLocalValveState('OPEN'); // Update immediately
+      }
       queryClient.invalidateQueries({ queryKey: ['status'] });
     },
   });
 
   const closeMutation = useMutation({
     mutationFn: valve.close,
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (response.data.success) {
+        setLocalValveState('CLOSED'); // Update immediately
+      }
       queryClient.invalidateQueries({ queryKey: ['status'] });
     },
   });
 
   const forceOpenMutation = useMutation({
     mutationFn: valve.forceOpen,
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (response.data.success) {
+        setLocalValveState('OPEN'); // Update immediately
+      }
       queryClient.invalidateQueries({ queryKey: ['status'] });
       setShowForceConfirm(false);
     },
@@ -59,6 +74,9 @@ export const ControlPanel = ({ valveState, emergencyMode }: ControlPanelProps) =
       setShowForceConfirm(true);
     }
   };
+
+  // Use local state for button logic (updates immediately on mutation success)
+  const currentState = localValveState || valveState;
 
   return (
     <div className="card">
@@ -91,7 +109,7 @@ export const ControlPanel = ({ valveState, emergencyMode }: ControlPanelProps) =
         {/* Open Button */}
         <button
           onClick={handleOpen}
-          disabled={!canOperate || emergencyMode || valveState === 'OPEN' || openMutation.isPending}
+          disabled={!canOperate || emergencyMode || currentState === 'OPEN' || openMutation.isPending}
           className="btn-primary w-full flex items-center justify-center gap-3 py-4 text-lg"
         >
           <Power className="w-6 h-6" />
@@ -100,8 +118,12 @@ export const ControlPanel = ({ valveState, emergencyMode }: ControlPanelProps) =
 
         {/* Close Button */}
         <button
-          onClick={() => closeMutation.mutate()}
-          disabled={valveState === 'CLOSED' || closeMutation.isPending}
+          onClick={() => {
+            if (window.confirm('Are you sure you want to CLOSE the valve?')) {
+              closeMutation.mutate();
+            }
+          }}
+          disabled={currentState === 'CLOSED' || closeMutation.isPending}
           className="btn-secondary w-full flex items-center justify-center gap-3 py-4 text-lg"
         >
           <PowerOff className="w-6 h-6" />
@@ -168,7 +190,7 @@ export const ControlPanel = ({ valveState, emergencyMode }: ControlPanelProps) =
       {openMutation.isError && (
         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-800">
-            {(openMutation.error as any)?.response?.data?.detail || 'Failed to open valve'}
+            <strong>Open Error:</strong> {(openMutation.error as any)?.response?.data?.detail || 'Failed to open valve'}
           </p>
         </div>
       )}
@@ -176,7 +198,23 @@ export const ControlPanel = ({ valveState, emergencyMode }: ControlPanelProps) =
       {openMutation.isSuccess && (
         <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-sm text-green-800">
-            {openMutation.data?.data.message || 'Valve opened successfully'}
+            <strong>Success:</strong> {openMutation.data?.data.message || 'Valve opened successfully'}
+          </p>
+        </div>
+      )}
+
+      {closeMutation.isError && (
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-800">
+            <strong>Close Error:</strong> {(closeMutation.error as any)?.response?.data?.detail || 'Failed to close valve'}
+          </p>
+        </div>
+      )}
+
+      {closeMutation.isSuccess && (
+        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-sm text-green-800">
+            <strong>Success:</strong> {closeMutation.data?.data.message || 'Valve closed successfully'}
           </p>
         </div>
       )}

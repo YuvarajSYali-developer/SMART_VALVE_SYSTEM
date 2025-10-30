@@ -86,32 +86,32 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for startup and shutdown events
     """
     # Startup
-    logger.info("🚀 Starting Smart Water Valve Backend...")
+    logger.info(">> Starting Smart Water Valve Backend...")
     
     # Initialize database
     init_db()
-    logger.info("✓ Database initialized")
+    logger.info("[OK] Database initialized")
     
     # Set telemetry callback
     serial_manager.set_telemetry_callback(handle_telemetry)
     
     # Connect to Arduino
     if serial_manager.connect():
-        logger.info("✓ Connected to Arduino")
+        logger.info("[OK] Connected to Arduino")
     else:
-        logger.warning("⚠ Arduino not connected (will retry in background)")
+        logger.warning("[WARN] Arduino not connected (will retry in background)")
     
     # Start serial read loop
     global telemetry_task
     telemetry_task = asyncio.create_task(serial_manager.read_loop())
-    logger.info("✓ Serial read loop started")
+    logger.info("[OK] Serial read loop started")
     
-    logger.info("✅ Backend ready!")
+    logger.info("[READY] Backend ready!")
     
     yield
     
     # Shutdown
-    logger.info("🛑 Shutting down...")
+    logger.info("[SHUTDOWN] Shutting down...")
     
     # Stop serial manager
     serial_manager.stop()
@@ -123,7 +123,7 @@ async def lifespan(app: FastAPI):
         except asyncio.TimeoutError:
             logger.warning("Telemetry task didn't stop gracefully")
     
-    logger.info("✓ Shutdown complete")
+    logger.info("[OK] Shutdown complete")
 
 
 # Create FastAPI app

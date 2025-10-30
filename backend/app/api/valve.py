@@ -59,6 +59,7 @@ async def open_valve(
     
     # Send OPEN command
     response = serial_manager.send_command("OPEN")
+    logger.info(f"OPEN command response: {repr(response)}")
     
     if not response:
         await log_operation(db, "OPEN", current_user, "FAILED", "No response from Arduino")
@@ -103,6 +104,7 @@ async def close_valve(
     
     # Send CLOSE command
     response = serial_manager.send_command("CLOSE")
+    logger.info(f"CLOSE command response: {repr(response)}")
     
     if not response:
         await log_operation(db, "CLOSE", current_user, "FAILED", "No response from Arduino")
@@ -209,3 +211,58 @@ async def reset_emergency(
             message=response,
             valve_state=None
         )
+
+
+@router.post("/test_mode/enable", response_model=ValveCommandResponse)
+async def enable_test_mode(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
+):
+    """
+    Enable test mode with mock sensor values (admin only)
+    Requires updated Arduino firmware with TEST_MODE_ON support
+    """
+    if not serial_manager.is_connected():
+        raise HTTPException(status_code=503, detail="Arduino not connected")
+    
+    # Send TEST_MODE_ON command
+    response = serial_manager.send_command("TEST_MODE_ON")
+    
+    if not response:
+        raise HTTPException(status_code=503, detail="No response from Arduino")
+    
+    logger.info(f"Test mode enabled by admin: {current_user.username}")
+    await log_operation(db, "TEST_MODE_ON", current_user, "SUCCESS", "Test mode enabled")
+    
+    return ValveCommandResponse(
+        success=True,
+        message="Test mode enabled - using mock sensor values",
+        valve_state=None
+    )
+
+
+@router.post("/test_mode/disable", response_model=ValveCommandResponse)
+async def disable_test_mode(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
+):
+    """
+    Disable test mode and return to real sensor values (admin only)
+    """
+    if not serial_manager.is_connected():
+        raise HTTPException(status_code=503, detail="Arduino not connected")
+    
+    # Send TEST_MODE_OFF command
+    response = serial_manager.send_command("TEST_MODE_OFF")
+    
+    if not response:
+        raise HTTPException(status_code=503, detail="No response from Arduino")
+    
+    logger.info(f"Test mode disabled by admin: {current_user.username}")
+    await log_operation(db, "TEST_MODE_OFF", current_user, "SUCCESS", "Test mode disabled")
+    
+    return ValveCommandResponse(
+        success=True,
+        message="Test mode disabled - using real sensor values",
+        valve_state=None
+    )

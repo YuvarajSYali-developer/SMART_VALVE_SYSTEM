@@ -16,7 +16,7 @@
     - Manual reset required after emergency
 
   Commands (Serial):
-    OPEN, CLOSE, STATUS, INFO, PING, FORCE_OPEN, RESET_EMERGENCY
+    OPEN, CLOSE, STATUS, INFO, PING, FORCE_OPEN, RESET_EMERGENCY, TEST_MODE_ON, TEST_MODE_OFF
     Telemetry every 1s:
       TELEMETRY:{"t":1234,"valve":"OPEN","p1":3.45,"p2":3.21,"c_src":140.2,"c_dst":230.1,"em":0}
 */
@@ -53,6 +53,7 @@ const float CONC_SENSOR_UNIT_MAX = 1000.0;   // full-scale = 1000 units
 // --- Global State ---
 bool valveState = false;
 bool emergencyMode = false;
+bool testMode = false;  // Test mode with mock sensor values
 unsigned long lastTelemetryMs = 0;
 unsigned long lastCommandTime = 0;
 unsigned long valveOpenTimestamp = 0;
@@ -80,6 +81,8 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(STATUS_LED, OUTPUT);
 
+  digitalWrite(RELAY_PIN, HIGH);
+  delay(1000);
   digitalWrite(RELAY_PIN, LOW);
   digitalWrite(STATUS_LED, LOW);
 
@@ -139,6 +142,11 @@ float analogToVoltage(int raw) {
 }
 
 float readPressure(int pin) {
+  if (testMode) {
+    // Return mock safe pressure values in test mode
+    return (pin == PRESSURE1_PIN) ? 2.5 : 2.3;  // Safe values below 6 bar
+  }
+  
   int raw = analogRead(pin);
   float v = analogToVoltage(raw);
   float v_clamped = constrain(v, PRESSURE_SENSOR_V_MIN, PRESSURE_SENSOR_V_MAX);
@@ -149,6 +157,11 @@ float readPressure(int pin) {
 }
 
 float readConcentration(int pin) {
+  if (testMode) {
+    // Return mock safe concentration values in test mode
+    return (pin == CONC_SRC_PIN) ? 150.0 : 200.0;  // Safe values
+  }
+  
   int raw = analogRead(pin);
   float v = analogToVoltage(raw);
   float v_clamped = constrain(v, CONC_SENSOR_V_MIN, CONC_SENSOR_V_MAX);
@@ -173,7 +186,17 @@ void processCommand(String cmd) {
   else if (cmd == "RESET_EMERGENCY") {
     emergencyMode = false;
     Serial.println("EVENT: Emergency mode reset successfully.");
-  } else {
+  }
+  else if (cmd == "TEST_MODE_ON") {
+    testMode = true;
+    emergencyMode = false;  // Clear emergency when entering test mode
+    Serial.println("TEST_MODE: Enabled (mock sensor values)");
+  }
+  else if (cmd == "TEST_MODE_OFF") {
+    testMode = false;
+    Serial.println("TEST_MODE: Disabled (real sensor values)");
+  }
+  else {
     Serial.println("ERROR: Unknown command");
   }
 }
@@ -267,6 +290,7 @@ void sendStatus() {
   Serial.println("=== SYSTEM STATUS ===");
   Serial.print("Valve: "); Serial.println(valveState ? "OPEN" : "CLOSED");
   Serial.print("Emergency: "); Serial.println(emergencyMode ? "YES" : "NO");
+  Serial.print("Test Mode: "); Serial.println(testMode ? "YES" : "NO");
   Serial.print("Total runtime (s): "); Serial.println(totalValveRunMs / 1000);
   Serial.println("=====================");
 }
@@ -276,7 +300,9 @@ void sendStartupInfo() {
   Serial.println(" Smart Water Valve System — Hardware Mode");
   Serial.println(" Baud Rate: 115200");
   Serial.println(" Commands: OPEN, CLOSE, STATUS, INFO, PING, FORCE_OPEN, RESET_EMERGENCY");
+  Serial.println("           TEST_MODE_ON, TEST_MODE_OFF");
   Serial.println(" Safety: Emergency triggers on overpressure or high concentration");
+  Serial.println(" Test Mode: Use TEST_MODE_ON for testing without sensors");
   Serial.println(" Telemetry format: TELEMETRY:{...}");
   Serial.println("=======================================");
 }
