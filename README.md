@@ -265,30 +265,6 @@ GND            →    Common Ground
 
 ---
 
-## 🗺️ Project Roadmap
-
-- [x] **Phase 1:** Arduino firmware with safety logic ✅
-- [ ] **Phase 2:** Backend API with serial communication
-- [ ] **Phase 3:** Database schema and ORM models
-- [ ] **Phase 4:** React dashboard with live telemetry
-- [ ] **Phase 5:** Docker deployment and CI/CD
-
----
-
-## 📋 Build Instructions
-
-This project uses an **AI-first workflow**. Each component can be generated using the prompts in [`PROJECT_PROMPT.md`](./PROJECT_PROMPT.md):
-
-1. **PROMPT 1 (✅ Complete):** Arduino firmware
-2. **PROMPT 2:** FastAPI backend with serial manager
-3. **PROMPT 3:** SQLite database schema
-4. **PROMPT 4:** React + TypeScript frontend
-5. **PROMPT 5:** Docker compose and deployment
-
-Simply paste each prompt section into your AI code editor (Cursor, v0.dev, ChatGPT, etc.) to generate production-ready code.
-
----
-
 ## 🤝 Contributing
 
 This is a personal IoT project, but suggestions and improvements are welcome!
